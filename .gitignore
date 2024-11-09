@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+myenv/
+.env
+
+# Node
+node_modules/
+.next/
+.env.local
+
+# System
+.DS_Store
+
+openaiapi/
+
+# API Keys
+openaiapi/
+../openaiapi/
