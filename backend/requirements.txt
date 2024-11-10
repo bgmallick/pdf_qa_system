@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pdfplumber
+python-dotenv
+pinecone-client
+langchain-openai
+langchain-pinecone
+langchain-core
+PyMuPDF
+fitz
