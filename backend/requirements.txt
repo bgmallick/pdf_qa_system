@@ -9,3 +9,4 @@ langchain-text-splitters
 langchain-core
 PyMuPDF==1.23.8
 pymupdf-fonts==1.0.5
+langchain
