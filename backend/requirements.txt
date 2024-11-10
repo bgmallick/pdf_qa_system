@@ -7,4 +7,3 @@ langchain-openai
 langchain-pinecone
 langchain-core
 PyMuPDF
-fitz
