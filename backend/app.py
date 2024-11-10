@@ -4,74 +4,124 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import os
 import shutil
-from typing import Optional
-import pdfplumber
-from langchain_community.vectorstores import Chroma
+import fitz  # PyMuPDF for PDF handling
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_text_splitters import CharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_pinecone import PineconeVectorStore
+from pinecone import Pinecone as PineconeClient
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 import logging
-
+from dotenv import load_dotenv
+import time
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+load_dotenv()
+
+# Get API keys from environment variables
+openai_api_key = os.getenv("OPENAI_API_KEY")
+pinecone_api_key = os.getenv("PINECONE_API_KEY")
+pinecone_environment = os.getenv("PINECONE_ENVIRONMENT")
+
+if not all([openai_api_key, pinecone_api_key, pinecone_environment]):
+    logger.error("Missing required environment variables!")
+    raise Exception("Please set all required environment variables (OPENAI_API_KEY, PINECONE_API_KEY, PINECONE_ENVIRONMENT)")
+
+# Initialize OpenAI
+os.environ["OPENAI_API_KEY"] = openai_api_key
+logger.info("Successfully loaded OpenAI API key")
+
+try:
+    # Initialize Pinecone
+    pc = PineconeClient(api_key=pinecone_api_key)
+    INDEX_NAME = "pdf-qa-index"
+    index = pc.Index(INDEX_NAME)
+
+except Exception as e:
+    logger.error(f"Failed to initialize Pinecone: {str(e)}")
+    raise Exception(f"Pinecone initialization failed: {str(e)}")
 
 app = FastAPI()
 
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "https://your-frontend-url.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Use your existing API key loading code - THIS IS THE PART WE'RE CHANGING
-try:
-    with open('../openaiapi/openai_api_key.txt', 'r') as file:
-        openai_api_key = file.read().strip()
-    os.environ["OPENAI_API_KEY"] = openai_api_key
-    logger.info("Successfully loaded OpenAI API key")
-except FileNotFoundError:
-    logger.error("OpenAI API key file not found! Make sure it exists at ../openaiapi/openai_api_key.txt")
-    raise Exception("OpenAI API key file not found at ../openaiapi/openai_api_key.txt")
-
-
 # Initialize models
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 llm = ChatOpenAI(model="gpt-4o-mini")
 
-# Global variable to store the current vector store
-current_vectorstore = None
-
-def process_pdf(file_path: str) -> str:
-    """Extract text from PDF."""
+def process_pdf(file_path: str) -> list:
+    """Extract text from PDF and return as Document objects."""
+    docs = []
     try:
-        text = ""
-        with pdfplumber.open(file_path) as pdf:
-            for page in pdf.pages:
-                text += page.extract_text() or ""
-        return text
+        with fitz.open(file_path) as pdf:
+            for i, page in enumerate(pdf):
+                text = page.get_text()
+                if text:
+                    doc_obj = Document(
+                        page_content=text,
+                        metadata={"page": i + 1, "source": file_path}
+                    )
+                    docs.append(doc_obj)
+        return docs
     except Exception as e:
         logger.error(f"Error processing PDF: {str(e)}")
         raise Exception(f"Failed to process PDF: {str(e)}")
-
-def create_vectorstore(text: str):
-    """Create vector store from text."""
+    
+def clear_pinecone_index():
+    """Clears all vectors from the specified Pinecone index if it contains any vectors."""
     try:
-        text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-        chunks = text_splitter.split_text(text)
-        
-        global current_vectorstore
-        current_vectorstore = Chroma.from_texts(
-            chunks,
-            embeddings,
-            collection_name="pdf_collection"
+        # Check if index exists and is initialized
+        if INDEX_NAME in pc.list_indexes():
+            # Get vector count to confirm if the index is populated
+            index_stats = index.describe_index_stats()
+            vector_count = index_stats["total_vector_count"]
+
+            if vector_count > 0:
+                # Only delete if vectors exist in the index
+                index.delete(delete_all=True)  # Deletes all vectors in the index
+                logger.info(f"Successfully cleared all vectors from index: {INDEX_NAME}")
+            else:
+                logger.info(f"Index {INDEX_NAME} is already empty.")
+        else:
+            logger.warning(f"Index {INDEX_NAME} does not exist.")
+    except Exception as e:
+        logger.error(f"Failed to clear index {INDEX_NAME}: {str(e)}")
+        raise Exception(f"Failed to clear Pinecone index: {str(e)}")
+    
+def create_vectorstore(docs: list):
+    """Create vector store from documents using Pinecone with optimized metadata."""
+    try:
+        # Clear existing vectors in the index before adding new ones
+        clear_pinecone_index()
+
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        texts = text_splitter.split_documents(docs)
+
+        vectorstore = PineconeVectorStore(
+            embedding=embeddings,
+            index=index,
+            text_key="text"
         )
+
+        vectorstore.add_texts(
+            texts=[t.page_content for t in texts],
+            ids=[f"doc_{i}" for i in range(len(texts))]
+        )
+        logger.info("Successfully created vector store")
+        return vectorstore
     except Exception as e:
         logger.error(f"Error creating vector store: {str(e)}")
         raise Exception(f"Failed to create vector store: {str(e)}")
@@ -87,15 +137,13 @@ async def upload_pdf(file: UploadFile = File(...)):
             content={"detail": "Only PDF files are allowed"}
         )
     
-    # Save uploaded file temporarily
     temp_file_path = f"temp_{file.filename}"
     try:
         with open(temp_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        logger.info(f"Processing PDF file: {file.filename}")
-        text = process_pdf(temp_file_path)
-        create_vectorstore(text)
+        docs = process_pdf(temp_file_path)
+        create_vectorstore(docs)
         
         return JSONResponse(
             status_code=200,
@@ -110,7 +158,6 @@ async def upload_pdf(file: UploadFile = File(...)):
         )
     
     finally:
-        # Clean up
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
 
@@ -122,17 +169,16 @@ async def ask_question(question: Question):
     """Handle questions about the uploaded PDF."""
     logger.info(f"Received question: {question.text}")
     
-    if current_vectorstore is None:
-        return JSONResponse(
-            status_code=400,
-            content={"detail": "Please upload a PDF first"}
-        )
-
     try:
-        # Create retrieval chain
-        retriever = current_vectorstore.as_retriever()
+        vectorstore = PineconeVectorStore(
+            index=index,
+            embedding=embeddings,
+            text_key="text"
+        )
         
-        # Create prompt template
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 200})  # Adjusted k value
+
+        # Combined system and human message in prompt template
         prompt = ChatPromptTemplate.from_template("""
         You are a knowledgeable assistant analyzing a document. Use **only** the provided context to answer questions.
         When formatting your response:
@@ -140,20 +186,31 @@ async def ask_question(question: Question):
         2. Preserve any relevant headers, lists, or structured content
         3. Use bullet points or numbered lists when presenting multiple items
         4. Highlight key terms or concepts using **bold** when appropriate
-                                                  
-        Answer the following question based only on the provided context:
-        Context: `{context}`
-        Question: `{input}`
 
-        Answer the question concisely and accurately, in a structured manner. If the answer cannot be found in the context, say "I cannot find the answer in the document."
+        Answer concisely, preserving structure and highlighting key points. If you cannot find the answer in the context, simply say - "I could not find the answer in the document."
+
+        Context: ```{context}```
+        Question: ```{input}```
         """)
 
         # Create and run the chain
         combine_documents_chain = create_stuff_documents_chain(llm, prompt)
         retrieval_chain = create_retrieval_chain(retriever, combine_documents_chain)
 
-        response = retrieval_chain.invoke({"input": question.text})
+        # Retry mechanism
+        max_retries = 2
+        retry_delay = 2  # seconds
+        for attempt in range(max_retries):
+            response = retrieval_chain.invoke({"input": question.text})
+            if response["answer"] != "I could not find the answer in the document.":
+                return JSONResponse(
+                    status_code=200,
+                    content={"answer": response["answer"]}
+                )
+            logger.warning("Answer not found on attempt {attempt+1}, retrying...")
+            time.sleep(retry_delay)
         
+        # Final response if retries fail
         return JSONResponse(
             status_code=200,
             content={"answer": response["answer"]}
@@ -168,7 +225,6 @@ async def ask_question(question: Question):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
     return {"status": "healthy"}
 
 if __name__ == "__main__":
