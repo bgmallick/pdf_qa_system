@@ -17,6 +17,7 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 import logging
 from dotenv import load_dotenv
 import time
+from pinecone import ServerlessSpec  # Ensure this is imported
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -80,31 +81,22 @@ def process_pdf(file_path: str) -> list:
         logger.error(f"Error processing PDF: {str(e)}")
         raise Exception(f"Failed to process PDF: {str(e)}")
     
-def clear_or_create_pinecone_index():
-    """Clears all vectors from the specified Pinecone index or creates it if it does not exist."""
+
+def clear_pinecone_index():
+    """Clears all vectors from the existing Pinecone index."""
     try:
-        if INDEX_NAME not in pc.list_indexes():
-            # Create the index if it does not exist
-            pc.create_index(
-                name=INDEX_NAME,
-                dimension=1536,  # Adjust to match your embedding model’s dimensionality
-                metric='cosine'
-            )
-            logger.info(f"Created Pinecone index: {INDEX_NAME}")
-        else:
-            # Clear existing vectors in the index
-            index = pc.Index(INDEX_NAME)
-            index.delete(delete_all=True)
-            logger.info(f"Successfully cleared all vectors from index: {INDEX_NAME}")
+        index = pc.Index(INDEX_NAME)
+        index.delete(delete_all=True)
+        logger.info(f"Successfully cleared all vectors from index: {INDEX_NAME}")
     except Exception as e:
-        logger.error(f"Failed to clear or create Pinecone index {INDEX_NAME}: {str(e)}")
-        raise Exception(f"Pinecone index management failed: {str(e)}")
+        logger.error(f"Failed to clear vectors in index {INDEX_NAME}: {str(e)}")
+        raise Exception(f"Failed to clear vectors in Pinecone index: {str(e)}")
     
 def create_vectorstore(docs: list):
     """Create vector store from documents using Pinecone with optimized metadata."""
     try:
         # Ensure the index is ready (clear if exists or create if not)
-        clear_or_create_pinecone_index()
+        clear_pinecone_index()
 
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         texts = text_splitter.split_documents(docs)
