@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
 export default function RAGInterface() {
   const [file, setFile] = useState<File | null>(null);
   const [question, setQuestion] = useState('');
@@ -36,7 +38,7 @@ export default function RAGInterface() {
     formData.append('file', file);
 
     try {
-      const response = await fetch('http://localhost:8000/upload/', {
+      const response = await fetch(`${backendUrl}/upload/`, {
         method: 'POST',
         body: formData,
       });
@@ -70,7 +72,7 @@ export default function RAGInterface() {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:8000/ask/', {
+      const response = await fetch(`${backendUrl}/ask/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
