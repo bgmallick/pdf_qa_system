@@ -5,6 +5,7 @@ python-dotenv
 pinecone-client
 langchain-openai
 langchain-pinecone
+langchain-text-splitters
 langchain-core
-PyMuPDF==1.23.8  # Specify version
-pymupdf-fonts==1.0.5  # Add this for better font support
+PyMuPDF==1.23.8
+pymupdf-fonts==1.0.5
