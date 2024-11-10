@@ -80,39 +80,38 @@ def process_pdf(file_path: str) -> list:
         logger.error(f"Error processing PDF: {str(e)}")
         raise Exception(f"Failed to process PDF: {str(e)}")
     
-def clear_pinecone_index():
-    """Clears all vectors from the specified Pinecone index if it contains any vectors."""
+def clear_or_create_pinecone_index():
+    """Clears all vectors from the specified Pinecone index or creates it if it does not exist."""
     try:
-        # Check if index exists and is initialized
-        if INDEX_NAME in pc.list_indexes():
-            # Get vector count to confirm if the index is populated
-            index_stats = index.describe_index_stats()
-            vector_count = index_stats["total_vector_count"]
-
-            if vector_count > 0:
-                # Only delete if vectors exist in the index
-                index.delete(delete_all=True)  # Deletes all vectors in the index
-                logger.info(f"Successfully cleared all vectors from index: {INDEX_NAME}")
-            else:
-                logger.info(f"Index {INDEX_NAME} is already empty.")
+        if INDEX_NAME not in pc.list_indexes():
+            # Create the index if it does not exist
+            pc.create_index(
+                name=INDEX_NAME,
+                dimension=1536,  # Adjust to match your embedding model’s dimensionality
+                metric='cosine'
+            )
+            logger.info(f"Created Pinecone index: {INDEX_NAME}")
         else:
-            logger.warning(f"Index {INDEX_NAME} does not exist.")
+            # Clear existing vectors in the index
+            index = pc.Index(INDEX_NAME)
+            index.delete(delete_all=True)
+            logger.info(f"Successfully cleared all vectors from index: {INDEX_NAME}")
     except Exception as e:
-        logger.error(f"Failed to clear index {INDEX_NAME}: {str(e)}")
-        raise Exception(f"Failed to clear Pinecone index: {str(e)}")
+        logger.error(f"Failed to clear or create Pinecone index {INDEX_NAME}: {str(e)}")
+        raise Exception(f"Pinecone index management failed: {str(e)}")
     
 def create_vectorstore(docs: list):
     """Create vector store from documents using Pinecone with optimized metadata."""
     try:
-        # Clear existing vectors in the index before adding new ones
-        clear_pinecone_index()
+        # Ensure the index is ready (clear if exists or create if not)
+        clear_or_create_pinecone_index()
 
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         texts = text_splitter.split_documents(docs)
 
         vectorstore = PineconeVectorStore(
             embedding=embeddings,
-            index=index,
+            index_name=INDEX_NAME,
             text_key="text"
         )
 
@@ -120,7 +119,7 @@ def create_vectorstore(docs: list):
             texts=[t.page_content for t in texts],
             ids=[f"doc_{i}" for i in range(len(texts))]
         )
-        logger.info("Successfully created vector store")
+        logger.info("Successfully created vector store with new document vectors.")
         return vectorstore
     except Exception as e:
         logger.error(f"Error creating vector store: {str(e)}")
