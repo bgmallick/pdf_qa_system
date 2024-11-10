@@ -164,20 +164,20 @@ export default function RAGInterface() {
           <div className="mt-4 p-4 bg-gray-50 rounded">
             <h3 className="font-semibold mb-2">Answer:</h3>
             <ReactMarkdown 
-              className="prose prose-blue max-w-none"
-              components={{
-                h1: ({node, ...props}) => <h1 className="text-2xl font-bold my-4" {...props}/>,
-                h2: ({node, ...props}) => <h2 className="text-xl font-bold my-3" {...props}/>,
-                h3: ({node, ...props}) => <h3 className="text-lg font-bold my-2" {...props}/>,
-                ul: ({node, ...props}) => <ul className="list-disc ml-4 my-2" {...props}/>,
-                ol: ({node, ...props}) => <ol className="list-decimal ml-4 my-2" {...props}/>,
-                li: ({node, ...props}) => <li className="my-1" {...props}/>,
-                p: ({node, ...props}) => <p className="my-2" {...props}/>,
-                strong: ({node, ...props}) => <strong className="font-bold text-gray-900" {...props}/>,
-                em: ({node, ...props}) => <em className="italic text-gray-800" {...props}/>,
-              }}
+            className="prose prose-blue max-w-none"
+            components={{
+                h1: (props) => <h1 className="text-2xl font-bold my-4" {...props} />,
+                h2: (props) => <h2 className="text-xl font-bold my-3" {...props} />,
+                h3: (props) => <h3 className="text-lg font-bold my-2" {...props} />,
+                ul: (props) => <ul className="list-disc ml-4 my-2" {...props} />,
+                ol: (props) => <ol className="list-decimal ml-4 my-2" {...props} />,
+                li: (props) => <li className="my-1" {...props} />,
+                p: (props) => <p className="my-2" {...props} />,
+                strong: (props) => <strong className="font-bold text-gray-900" {...props} />,
+                em: (props) => <em className="italic text-gray-800" {...props} />,
+            }}
             >
-              {answer}
+            {answer}
             </ReactMarkdown>
           </div>
         )}
