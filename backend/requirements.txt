@@ -1,9 +1,10 @@
 fastapi
 uvicorn
-pdfplumber
+python-multipart
 python-dotenv
 pinecone-client
 langchain-openai
 langchain-pinecone
 langchain-core
-PyMuPDF
+PyMuPDF==1.23.8  # Specify version
+pymupdf-fonts==1.0.5  # Add this for better font support
