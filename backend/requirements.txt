@@ -1,12 +1,15 @@
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
 python-dotenv
 pinecone-client
+langchain
 langchain-openai
 langchain-pinecone
 langchain-text-splitters
 langchain-core
+langchain-community
 PyMuPDF==1.23.8
 pymupdf-fonts==1.0.5
-langchain
+pydantic
+uuid

@@ -18,8 +18,9 @@
         "name": "next"
       }
     ],
+    "baseUrl": ".",  // Add this line
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./app/*"]  // Change this line
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
