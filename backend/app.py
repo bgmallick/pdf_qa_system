@@ -289,7 +289,7 @@ async def ask_question(question: Question):
 
         ###Data for Context###
         **Previous conversation history:**
-        `{chat_history}`
+        `{history}`
 
         **User's Question:** `{question}`
 
