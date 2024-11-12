@@ -226,7 +226,7 @@ async def ask_question(question: Question):
         - **Context:** You will receive relevant information from a knowledge base, provided separately as `**context**.
         - **History:** You will also have access to the past conversation history, provided separately as `**conversation history** 
         2. **Response Guidelines:**
-        - **Primary Sources:** Base all answers solely on the information contained within `{context}` and `{history}`.
+        - **Primary Sources:** Base all answers solely on the information contained within **context** and **history**.
         - **Exclusions:** Do not use any external knowledge or information beyond what is provided in **context** and **conversation history** .
         - **Acknowledgment of Limitations:** If the information required to answer a question is not available in **context** and **conversation history**, respond by stating that the information is not available.
         - **Handling General Queries:**
@@ -289,7 +289,7 @@ async def ask_question(question: Question):
 
         ###Data for Context###
         **Previous conversation history:**
-        `{history}`
+        `{chat_history}`
 
         **User's Question:** `{question}`
 
